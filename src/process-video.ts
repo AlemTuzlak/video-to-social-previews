@@ -189,7 +189,7 @@ async function transcribeViaApi(wavPath: string, outDir: string) {
   const j = await res.json();
   const srtText: string = j.srt || (j.segments?.map((s: any) => `${s.text}`).join('\n') ?? '');
   const transcriptText: string = j.text || '';
-  await fs.writeFile(path.join(outDir, 'transcript.txt'), transcriptText, 'utf8');
+  await fs.writeFile(path.join(outDir, 'transcript.txt'), srtText, 'utf8');
   await fs.writeFile(path.join(outDir, "original_transcript.txt"), srtText, 'utf8');
   return { srtText, transcriptText };
 }
