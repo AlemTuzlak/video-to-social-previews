@@ -5,6 +5,7 @@ This project is an automation script that let's you generate:
 - Title, description and tags for the video based on the transcript.
 - YouTube chapters based on the transcript.
 - Social media posts based on the transcript.
+- Blog post based on the transcript.
 
 ## Setup
 1. Clone the repository to your local machine.

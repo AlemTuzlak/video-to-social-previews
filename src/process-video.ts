@@ -80,7 +80,11 @@ const SocialSchema = z.object({
   linkedin: z.object({ post: z.string().min(50), hashtags: z.array(z.string()).max(10).optional() }),
   reddit: z.object({ title: z.string().min(10).max(180), body: z.string().min(50) }),
 });
-const OutputSchema = z.object({ youtube: YouTubeSchema, socials: SocialSchema });
+const BlogSchema = z.object({
+  title: z.string().min(10).max(120),
+  content: z.string().min(200),
+});
+const OutputSchema = z.object({ youtube: YouTubeSchema, socials: SocialSchema, blog: BlogSchema });
 export type Output = z.infer<typeof OutputSchema>;
 
 // OpenAI-compatible LLM client (Ollama by default, OpenAI optional)
@@ -110,7 +114,7 @@ async function chatJSON<T>(messages: any[]): Promise<T> {
 
 function makeSystemPrompt() {
   return `
-  You are a YouTube strategist and social copywriter. 
+  You are a YouTube strategist, social copywriter, and technical blog writer. 
   The videos are coding related tutorials or explainers.
 
   IMPORTANT: Do not make up information about the video that is not in the transcript. Only use what is provided. Decipher the content as accurately as possible from
@@ -128,14 +132,36 @@ function makeSystemPrompt() {
   Create YouTube chapters for the content if possible, with timestamps in MM:SS format, the chapters should cover the main sections of the video and you
   should aim for 3-10 chapters depending on the length of the video. The name of the chapter should be descriptive of what the transcript section covers.
 
+  The final output should be in JSON format with the following structure:
+  {
+    "youtube": {
+      // max 70 characters
+      "title": "string",
+      "description": "string",
+      // min 5, max 25
+      "tags": ["string", "..."], 
+      "chapters": [{"start": "MM:SS", "title": "string"}, "..."]
+    },
+
   Additionally, create social media copy for the following platforms:
   - X (Twitter): A main tweet (<= 280 chars) and up to 3 follow-up tweets for a thread.
   - Bluesky: A post (<= 300 chars) summarizing the video.
   - LinkedIn: A post (>= 50 chars) with relevant hashtags (up to 10).
   - Reddit: A title (10-180 chars) and body (>= 50 chars) suitable for a relevant subreddit.
 
-  Return ONLY JSON with main keys "youtube" and "socials".
-  Ensure the JSON is properly formatted.
+  Additionally, create a blog post based on the transcript:
+  - Title: A compelling blog post title (10-120 chars)
+  - Content: A well-structured blog post in Markdown format (minimum 200 chars) that:
+    * Expands on the concepts from the transcript
+    * Includes proper headings (##, ###)
+    * Contains code examples deduced from the transcript (use proper markdown code blocks with language syntax highlighting)
+    * Has clear explanations of the code
+    * Follows a logical structure (introduction, main content sections, conclusion)
+    * Uses bullet points and formatting for readability
+    * If code is mentioned in the transcript, recreate it accurately in the blog post
+
+  Return ONLY JSON with main keys "youtube", "socials", and "blog".
+  Ensure the JSON is properly formatted and all strings are properly escaped.
   Example output:
   {
     "youtube": {
@@ -149,6 +175,10 @@ function makeSystemPrompt() {
       "bluesky": {"post": "Bluesky post content..."},
       "linkedin": {"post": "LinkedIn post content...", "hashtags": ["hashtag1", "..."]},
       "reddit": {"title": "Reddit post title...", "body": "Reddit post body..."}
+    },
+    "blog": {
+      "title": "Your Blog Post Title",
+      "content": "# Your Blog Post Title\\n\\n## Introduction\\n\\nContent here...\\n\\n## Main Section\\n\\nMore content...\\n\\n\`\`\`javascript\\nconst example = 'code';\\n\`\`\`\\n\\n## Conclusion\\n\\nFinal thoughts..."
     }
   }
   Do not add any explanations outside the JSON. Adhere to the structure strictly and more is preferred to less.
@@ -208,6 +238,7 @@ async function generateOutputs({ titleGuess, transcript }: { titleGuess: string;
     { role: 'system', content: makeSystemPrompt() },
     { role: 'user', content: makeUserPrompt(titleGuess, shortTx) },
   ]);
+  console.log('Raw LLM output:', raw);
   return OutputSchema.parse(raw);
 }
 
@@ -215,6 +246,7 @@ async function writeOutputs(baseOut: string, out: Output, srt: string, transcrip
   await ensureDir(baseOut);
   await fs.writeFile(path.join(baseOut, 'youtube.json'), JSON.stringify(out.youtube, null, 2), 'utf8');
   await fs.writeFile(path.join(baseOut, 'socials.json'), JSON.stringify(out.socials, null, 2), 'utf8');
+  await fs.writeFile(path.join(baseOut, 'blog.json'), JSON.stringify(out.blog, null, 2), 'utf8');
   await fs.writeFile(path.join(baseOut, 'transcript.srt'), srt, 'utf8');
   await fs.writeFile(path.join(baseOut, 'transcript.txt'), transcript, 'utf8');
 
@@ -229,6 +261,9 @@ async function writeOutputs(baseOut: string, out: Output, srt: string, transcrip
     + (out.socials.linkedin.hashtags?.length ? out.socials.linkedin.hashtags.map(h => `#${h}`).join(' ') + '\n\n' : '')
     + `## Reddit\n**Title:** ${out.socials.reddit.title}\n\n${out.socials.reddit.body}\n`;
   await fs.writeFile(path.join(baseOut, 'socials.md'), socialsMd, 'utf8');
+
+  // Write blog post as markdown
+  await fs.writeFile(path.join(baseOut, 'blog.md'), out.blog.content, 'utf8');
 }
 
 async function extractAudioAndProcess(mp4Path: string, transcriptOnly = false) {
@@ -264,6 +299,7 @@ async function extractAudioAndProcess(mp4Path: string, transcriptOnly = false) {
   console.log(`\nDone. Open ${outBase} for:`);
   console.log('- youtube.md (title/description/tags/chapters)');
   console.log('- socials.md (X, Bluesky, LinkedIn, Reddit)');
+  console.log('- blog.md (blog post with code examples)');
   console.log('- transcript.srt / transcript.txt');
 }
 
