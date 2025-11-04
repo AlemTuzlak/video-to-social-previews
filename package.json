@@ -1,0 +1,22 @@
+{
+  "name": "automation",
+  "version": "1.0.0",
+  "description": "automation for yt videos",
+  "license": "MIT",
+  "author": "AlemTuzlak",
+  "type": "module",
+  "main": "index.ts",
+  "scripts": {
+    "generate": "tsx src/process-video.ts"
+  },
+  "dependencies": {
+    "dotenv": "^17.2.3",
+    "execa": "^9.6.0",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "@types/node": "^24.9.2",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3"
+  }
+}
